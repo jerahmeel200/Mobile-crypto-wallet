@@ -1,13 +1,45 @@
+import Constants from 'expo-constants';
+
 const COINGECKO_API_URL = 'https://api.coingecko.com/api/v3';
 
-// CoinGecko free tier doesn't require an API key
-// If you have a Pro API key, you can add it via environment variables
+
 
 class ApiService {
   private baseUrl: string;
+  private apiKey: string | undefined;
 
   constructor() {
     this.baseUrl = COINGECKO_API_URL;
+   
+    this.apiKey = 
+      process.env.EXPO_PUBLIC_COINGECKO_API_KEY ||
+      process.env.COINGECKO_API_KEY ||
+      Constants.expoConfig?.extra?.coingeckoApiKey;
+  }
+
+  private getHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    // Add API key to headers if available
+    if (this.apiKey) {
+      headers['x-cg-pro-api-key'] = this.apiKey;
+    }
+
+    return headers;
+  }
+
+  private buildUrl(endpoint: string): string {
+    const url = `${this.baseUrl}${endpoint}`;
+    
+     
+    if (this.apiKey) {
+      const separator = endpoint.includes('?') ? '&' : '?';
+      return `${url}${separator}x_cg_pro_api_key=${this.apiKey}`;
+    }
+    
+    return url;
   }
 
   private async fetchWithErrorHandling<T>(
@@ -15,20 +47,22 @@ class ApiService {
     options?: RequestInit
   ): Promise<T> {
     try {
-      const url = `${this.baseUrl}${endpoint}`;
+      const url = this.buildUrl(endpoint);
+      const headers = {
+        ...this.getHeaders(),
+        ...options?.headers,
+      };
+
       const response = await fetch(url, {
         ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          ...options?.headers,
-        },
+        headers,
       });
 
       if (!response.ok) {
         throw new Error(`API Error: ${response.status} ${response.statusText}`);
       }
 
-      return await response.json();
+      return (await response.json()) as T;
     } catch (error) {
       if (error instanceof Error) {
         throw new Error(`Network error: ${error.message}`);
